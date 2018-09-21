@@ -15,9 +15,64 @@ namespace WindowsFormsApp1
 {
     public partial class Form1 : Form
     {
-        class Bullet
+        class Enemy
         {
-            int x, y, w, h;
+            public int x, y, direction;
+            public float fall;
+            public bool hit = false, dead = true;
+
+            public Enemy(GameField gameField)
+            {
+                Random rnd = new Random();
+                x = rnd.Next(gameField.Width);
+                y = 0;
+                direction = 1;
+                int to = rnd.Next(2);
+                for(int i=0; i< to; i++)
+                {
+                    direction *= -1;
+                }
+                fall = 0;
+            }
+
+            public async void kill()
+            {
+                await Task.Delay(2000);
+                dead = true;
+
+            }
+
+            public void Collision(Rectangle[] Amo, int amoSize, Bitmap enemyModel)
+            {
+                for (int i = 0; i < amoSize; i++)
+                {
+                    if (Amo[i].Y < y + enemyModel.Height && Amo[i].X > x && Amo[i].X < x + enemyModel.Width)
+                    {
+                        hit = true;
+                        direction = 0;
+                    }
+                }
+            }
+
+            public void isOnBottom(Bitmap shipModel, Font font, GameField gameField, PaintEventArgs e, int Y, Timer timer)
+            {
+                    if (Y - shipModel.Height <= y && !dead)
+                {
+                    Graphics g = e.Graphics;
+                    SolidBrush p = new SolidBrush(Color.Black);
+                    PointF point = new PointF();
+                    point.X = gameField.Width / 2 - 50;
+                    point.Y = gameField.Height / 2;
+                    g.DrawString("You Lose!", font, p, point);
+                    timer.Stop();
+                }
+            }
+
+            public async void Delay()
+            {
+                await Task.Delay(2000);
+
+            }
 
         }
 
@@ -27,17 +82,21 @@ namespace WindowsFormsApp1
         float enemyFall, rate;
         bool hit = false, dead = false;
         int amoSize, next;
-        int countdown;
-        string str;
         Rectangle[] Amo;
+        Enemy[] enemies;
         int[] goup;
-        Rectangle box;
-        Bitmap shipModel, enemyModel;
-        Font hitFont = new Font("Arial", 10);
+        Bitmap shipModel, enemyModel, bulletModel;
+        Font font = new Font("Arial", 16);
 
         public Form1()
         {
             InitializeComponent();
+            enemies = new Enemy[100];
+            for (int i=0; i < enemies.Length; i++)
+            {
+                enemies[i] = new Enemy(gameField1);
+            }
+            spawn();
             this.KeyPreview = true;
             next = 0;
             direction = 0;
@@ -50,24 +109,13 @@ namespace WindowsFormsApp1
             {
                 shipModel = (Bitmap)Image.FromFile(@"C:\Users\rafal\source\repos\WindowsFormsApp1\WindowsFormsApp1\ship.bmp", true);
                 enemyModel = (Bitmap)Image.FromFile(@"C:\Users\rafal\source\repos\WindowsFormsApp1\WindowsFormsApp1\enemy.bmp", true);
+                bulletModel = (Bitmap)Image.FromFile(@"C:\Users\rafal\source\repos\WindowsFormsApp1\WindowsFormsApp1\bullet.bmp", true);
             }
             catch (System.IO.FileNotFoundException)
             {
                 MessageBox.Show("Nie ma pliku");
             }
 
-        }
-
-        public void Collision()
-        {
-            for (int i=0; i < amoSize; i++)
-            {
-                if(Amo[i].Y < enemyY + enemyModel.Height && Amo[i].X > enemyX && Amo[i].X < enemyX + enemyModel.Width)
-                {
-                    hit = true;
-                    enemyDirection = 0;
-                }
-            }
         }
 
         private void button1_Click(object sender, EventArgs e)
@@ -132,15 +180,32 @@ namespace WindowsFormsApp1
             this.Dispose(false);
         }
 
+        public async void spawn()
+        {
+            int delay = 10000;
+            for (int i = 0; i < enemies.Length; i++)
+            {
+                enemies[i].dead = false;
+                await Task.Delay(delay);
+                delay -= 100;
+            }
+        }
+
         private void timer1_Tick(object sender, EventArgs e)
         {
-            enemyX += enemyDirection;
-            enemyFall += 0.2f;
-            enemyY = (int)enemyFall;
-            if (enemyX >= gameField1.Width - enemyModel.Width)
-            { enemyDirection = -1; }
-            if (enemyX <= 0)
-            { enemyDirection = 1; }
+            for (int i=0; i < enemies.Length; i++)
+            {
+                if (enemies[i].dead == false)
+                {
+                    enemies[i].x += enemies[i].direction;
+                    enemies[i].fall += 0.2f;
+                    enemies[i].y = (int)enemies[i].fall;
+                    if (enemies[i].x >= gameField1.Width - enemyModel.Width)
+                    { enemies[i].direction = -1; }
+                    if (enemies[i].x <= 0)
+                    { enemies[i].direction = 1; }
+                }
+            }
             gameField1.Refresh();
         }
 
@@ -163,7 +228,7 @@ namespace WindowsFormsApp1
             }
             else { next = 0; }
         }
-
+        int count=0;
         private void gameField1_Paint(object sender, PaintEventArgs e)
         {
             Graphics g = e.Graphics;
@@ -173,35 +238,26 @@ namespace WindowsFormsApp1
             shipModel.MakeTransparent(backColor);
             g.DrawImage(shipModel, x - 7, y - shipModel.Height + 15);
             enemyModel.MakeTransparent(backColor);
-            Collision();
-            if (!dead)
-            {
-                if (hit == false)
-                {
-                    g.DrawImage(enemyModel, enemyX, enemyY);
+            count++;
+                for (int i = 0; i < enemies.Length; i++)
+                {                
+                    if (enemies[i].dead == false)
+                    {
+                    enemies[i].Collision(Amo, 10, enemyModel);
+                    enemies[i].isOnBottom(shipModel, font, gameField1, e, y, timer1);
+                    if (enemies[i].hit == false)
+                        {
+                            g.DrawImage(enemyModel, enemies[i].x, enemies[i].y);
+                        }
+                        else
+                        {
+                            g.DrawString("Trafiony", Font, p, enemies[i].x, enemies[i].y);
+                            enemies[i].kill();
+                    }
+                    }
                 }
-                else
-                {
-                    g.DrawString("Trafiony", hitFont, p, enemyX, enemyY);
-                    kill();
-                }
-            }
             setAmoXY();
             AmoRefresh(g);
-        }
-
-        public async void kill()
-        {
-            await Task.Delay(2000);
-            dead = true;
-
-        }
-
-        public void setBox(int x)
-        {
-            box.X = x - w;
-            box.Width = 2 * w;
-            box.Height = 2 * h;
         }
      
         private void Init_Amo()
@@ -233,7 +289,7 @@ namespace WindowsFormsApp1
             for (int i = 0; i < amoSize; i++)
             {
                 g.FillRectangle(pa, Amo[i]);
-                g.DrawRectangle(new Pen(pa), Amo[i]);
+                g.DrawImage(bulletModel , Amo[i].X , Amo[i].Y);
             }
         }
 
